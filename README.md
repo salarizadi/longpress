@@ -2,6 +2,10 @@
 
 A jQuery plugin for handling long press events on both mobile and desktop devices.
 
+## Demo
+
+[View Live Demo on CodePen](https://codepen.io/salariz/pen/OPJQbXz)
+
 ## Features
 
 - Works with both touch and mouse events
