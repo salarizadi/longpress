@@ -46,6 +46,9 @@ $('#button').longPress({
         console.log('Maximum hold time reached');
     }
 });
+
+// To destroy the plugin instance
+$('#myButton').longPressDestroy();
 ```
 
 ## Options
