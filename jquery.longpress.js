@@ -9,7 +9,7 @@
 (function($) {
     'use strict';
 
-    $.fn.buttonHold = function(options) {
+    $.fn.longPress = function(options) {
         // Default settings
         const settings = $.extend({
             holdTime: 500,         // Time in ms to trigger initial hold
@@ -129,7 +129,7 @@
                 .on('mouseup touchend touchcancel', endHold);
 
             // Store cleanup function
-            $button.data('buttonHoldCleanup', function() {
+            $button.data('longPressCleanup', function() {
                 $button
                     .off('mousedown touchstart')
                     .off('contextmenu');
@@ -143,13 +143,13 @@
     };
 
     // Method to destroy the plugin
-    $.fn.buttonHoldDestroy = function() {
+    $.fn.longPressDestroy = function() {
         return this.each(function() {
             const $button = $(this);
-            const cleanup = $button.data('buttonHoldCleanup');
+            const cleanup = $button.data('longPressCleanup');
             if (cleanup) {
                 cleanup();
-                $button.removeData('buttonHoldCleanup');
+                $button.removeData('longPressCleanup');
             }
         });
     };
