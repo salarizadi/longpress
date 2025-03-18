@@ -2,6 +2,11 @@
 
 A jQuery plugin for handling long press events on both mobile and desktop devices.
 
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-2.0.0-blue.svg)](https://github.com/salarizadi/longpress)
+[![jsDelivr](https://data.jsdelivr.com/v1/package/gh/salarizadi/longpress/badge)](https://www.jsdelivr.com/package/gh/salarizadi/longpress)
+[![CodePen demo](https://img.shields.io/badge/CodePen-demo-blue.svg)](https://codepen.io/salariz/pen/OPJQbXz)
+
 ## Demo
 
 [View Live Demo on CodePen](https://codepen.io/salariz/pen/OPJQbXz)
@@ -14,12 +19,13 @@ A jQuery plugin for handling long press events on both mobile and desktop device
 - Progress bar support
 - Customizable callbacks
 - Mobile-friendly
+- Context menu prevention for right-clicks
 - No external dependencies (except jQuery)
 
 ## Installation
 
 ```html
-<script src="jquery.longpress.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/salarizadi/longpress@main/jquery.longpress.js"></script>
 ```
 
 ## Usage
@@ -44,7 +50,8 @@ $('#button').longPress({
     },
     onMaxHold: function() {
         console.log('Maximum hold time reached');
-    }
+    },
+    preventContextMenu: true // Prevent context menu on right-click
 });
 
 // To destroy the plugin instance
@@ -59,15 +66,19 @@ $('#myButton').longPressDestroy();
 | maxHoldTime | Number/null | null | Maximum hold duration (ms) |
 | holdClass | String | 'holding' | CSS class added while holding |
 | progressBar | Boolean | false | Show progress bar |
+| progressBarClass | String | 'button-hold-progress' | CSS class for the progress bar |
+| throttleProgress | Number | 16 | Throttle interval for progress updates (ms) |
+| touchMoveThreshold | Number | 10 | Movement threshold to cancel hold (px) |
+| preventContextMenu | Boolean | true | Prevent context menu on right-click |
 | onHoldStart | Function | null | Called when hold starts |
 | onHold | Function | null | Called during hold |
 | onHoldEnd | Function | null | Called when hold ends |
 | onMaxHold | Function | null | Called at maximum hold time |
 
 ## Browser Support
- - Chrome (latest)
- - Firefox (latest)
- - Safari (latest)
- - Edge (latest)
- - iOS Safari (latest)
- - Android Browser (latest)
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)
+- iOS Safari (latest)
+- Android Browser (latest)
