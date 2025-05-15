@@ -1,6 +1,6 @@
 /**
  *  Copyright (c) 2025
- *  @Version : 2.0.0
+ *  @Version : 2.0.1
  *  @Author  : https://salarizadi.ir
  *  @Repository : https://github.com/salarizadi/longpress
  *  @Description: A jQuery plugin for handling long press events on both mobile and desktop devices.
@@ -23,11 +23,14 @@
                 onHold: () => {},
                 onHoldEnd: () => {},
                 onMaxHold: () => {},
+                onClick: () => {},
                 progressBar: false,
                 progressBarClass: "button-hold-progress",
                 throttleProgress: 16,
-                touchMoveThreshold: 10,
-                preventContextMenu: true
+                touchMoveThreshold: 3,
+                preventContextMenu: true,
+                enableSwipe: false,
+                onSwipe: () => {}
             },
             options
         );
@@ -46,7 +49,12 @@
                 promiseChain: Promise.resolve(),
                 lastProgress: 0,
                 holdTimeout: null,
-                rightClickHolding: false // New flag for right-click holding
+                rightClickHolding: false,
+                isSwiping: false,
+                isScrolling: false,
+                touchStartTime: null,
+                hasMoved: false,
+                clickHandled: false
             };
 
             // Store original styles for cleanup
@@ -84,7 +92,7 @@
             $button.css({
                 "user-select": "none",
                 "-webkit-user-select": "none",
-                "touch-action": "manipulation"
+                "touch-action": "pan-x pan-y"
             });
 
             // Safe callback handler
@@ -128,18 +136,69 @@
                 instance.animationFrameId = requestAnimationFrame(updateProgress);
             };
 
+            // End holding handler
+            const endHold = async function (e) {
+                if (!instance.isHolding) return;
+
+                clearTimeout(instance.holdTimeout);
+                const holdDuration = Date.now() - instance.holdStartTime;
+                const touchDuration = instance.touchStartTime ? Date.now() - instance.touchStartTime : 0;
+
+                instance.isHolding = false;
+                const wasMoved = instance.hasMoved;
+                const wasScrolling = instance.isScrolling;
+
+                cancelAnimationFrame(instance.animationFrameId);
+                $button.removeClass(settings.holdClass);
+
+                if (instance.$progressBar) {
+                    instance.$progressBar.css("width", "0%");
+                }
+
+                // Handle click vs hold vs scroll
+                if (!instance.clickHandled && !wasMoved && !wasScrolling && touchDuration < 200) {
+                    // Quick tap - trigger click
+                    instance.clickHandled = true;
+                    await safeCallback(settings.onClick, e, holdDuration);
+                } else if (holdDuration >= settings.holdTime &&
+                    ((!wasScrolling) || (!settings.enableSwipe && holdDuration >= settings.holdTime))) {
+                    // Long press completed - trigger even if moved when swipe is disabled
+                    // Only prevent default if the event is cancelable
+                    if (e && e.cancelable) {
+                        e.preventDefault();
+                    }
+                    await safeCallback(settings.onHoldEnd, e, holdDuration);
+                }
+
+                // Reset states
+                instance.initialTouch = null;
+                instance.initialMouse = null;
+                instance.rightClickHolding = false;
+                instance.isSwiping = false;
+                instance.hasMoved = false;
+                instance.isScrolling = false;
+
+                // Don't reset touchStartTime immediately to prevent double events
+                setTimeout(() => {
+                    if (!instance.isHolding) {
+                        instance.touchStartTime = null;
+                        instance.clickHandled = false;
+                    }
+                }, 500);
+            };
+
             // Handle right-click specifically
             const handleContextMenu = function (e) {
-                if (settings.preventContextMenu) {
+                if (settings.preventContextMenu && e.cancelable) {
                     e.preventDefault();
-                    e.stopPropagation(); // Stop event propagation
+                    e.stopPropagation();
                 }
 
                 if (!instance.isHolding) {
-                    startHold(e, true); // Pass true to indicate right-click
+                    startHold(e, true);
                 }
 
-                return false; // Prevent default context menu
+                return false;
             };
 
             // Start holding handler
@@ -153,21 +212,33 @@
 
                 const evt = e.touches ? e.touches[0] : e;
                 if (e.type === "mousedown" || isRightClick) {
+                    // Ignore mousedown if it was triggered right after a touch event
+                    if (instance.touchStartTime && (Date.now() - instance.touchStartTime) < 500) {
+                        return;
+                    }
                     instance.initialMouse = { x: evt.pageX, y: evt.pageY };
                     instance.rightClickHolding = isRightClick;
+                    instance.touchStartTime = Date.now();
                 } else {
                     instance.initialTouch = { x: evt.pageX, y: evt.pageY };
+                    instance.touchStartTime = Date.now();
                 }
 
                 instance.isHolding = true;
                 instance.holdStartTime = Date.now();
                 instance.lastProgress = 0;
+                instance.hasMoved = false;
+                instance.isScrolling = false;
+                instance.clickHandled = false;
 
                 $button.addClass(settings.holdClass);
 
                 // Set timeout for hold start
                 instance.holdTimeout = setTimeout(async () => {
-                    if (instance.isHolding) {
+                    if (instance.isHolding && !instance.hasMoved) {
+                        if (e && e.cancelable) {
+                            e.preventDefault();
+                        }
                         await safeCallback(settings.onHoldStart, e);
                         if (instance.isHolding) {
                             updateProgress();
@@ -175,86 +246,131 @@
                     }
                 }, settings.holdTime);
 
-                // Only prevent default for touch events and right-clicks
-                if (e.type === "touchstart" || isRightClick) {
+                // Only prevent default for right-clicks
+                if (isRightClick) {
                     e.preventDefault();
                 }
-
-                // Stop event propagation to prevent conflicts with Swiper
-                e.stopPropagation();
-            };
-
-            // End holding handler
-            const endHold = async function (e) {
-                if (!instance.isHolding) return;
-
-                clearTimeout(instance.holdTimeout);
-                const holdDuration = Date.now() - instance.holdStartTime;
-                instance.isHolding = false;
-                instance.initialTouch = null;
-                instance.initialMouse = null;
-                instance.rightClickHolding = false;
-
-                cancelAnimationFrame(instance.animationFrameId);
-                $button.removeClass(settings.holdClass);
-
-                if (instance.$progressBar) {
-                    instance.$progressBar.css("width", "0%");
-                }
-
-                await safeCallback(settings.onHoldEnd, e, holdDuration);
-
-                // Stop event propagation
-                if (e) {
-                    e.stopPropagation();
-                }
-            };
-
-            // Mouse move handler
-            const handleMouseMove = function (e) {
-                if (!instance.isHolding) return;
-
-                const initial = instance.initialMouse;
-                if (!initial) return;
-
-                const moveThreshold = settings.touchMoveThreshold;
-                const deltaX = Math.abs(e.pageX - initial.x);
-                const deltaY = Math.abs(e.pageY - initial.y);
-
-                if (deltaX > moveThreshold || deltaY > moveThreshold) {
-                    endHold(e);
-                }
-
-                // Stop event propagation
-                e.stopPropagation();
             };
 
             // Touch move handler
             const handleTouchMove = function (e) {
                 if (!instance.isHolding || !instance.initialTouch) return;
 
-                const touch = e.touches[0];
                 const moveThreshold = settings.touchMoveThreshold;
-                const deltaX = Math.abs(touch.pageX - instance.initialTouch.x);
-                const deltaY = Math.abs(touch.pageY - instance.initialTouch.y);
+                const touch = e.touches[0];
+                const deltaX = touch.pageX - instance.initialTouch.x;
+                const deltaY = touch.pageY - instance.initialTouch.y;
+                const absDeltaX = Math.abs(deltaX);
+                const absDeltaY = Math.abs(deltaY);
+                const currentTime = Date.now();
+                const holdDuration = currentTime - instance.holdStartTime;
 
-                if (deltaX > moveThreshold || deltaY > moveThreshold) {
-                    endHold(e);
+                // Mark as moved if threshold exceeded
+                if (absDeltaX > moveThreshold || absDeltaY > moveThreshold) {
+                    instance.hasMoved = true;
+                }
+
+                // Handle swipe first if enabled
+                if (settings.enableSwipe && instance.hasMoved) {
+                    let direction = '';
+                    // If horizontal movement is greater than vertical
+                    if (absDeltaX > absDeltaY) {
+                        direction = deltaX > 0 ? 'right' : 'left';
+                        instance.isSwiping = true;
+                        safeCallback(settings.onSwipe, e, direction, { deltaX, deltaY });
+                        endHold(e);
+                        return;
+                    }
+                    // If vertical movement is greater than horizontal
+                    else if (absDeltaY > moveThreshold) {
+                        direction = deltaY > 0 ? 'down' : 'up';
+                        // If swipe is enabled, check for swipe first
+                        if (absDeltaY > moveThreshold * 1.5) {
+                            instance.isSwiping = true;
+                            instance.isScrolling = false;
+                            safeCallback(settings.onSwipe, e, direction, { deltaX, deltaY });
+                            endHold(e);
+                            return;
+                        }
+                        // Otherwise treat as scroll
+                        else {
+                            instance.isScrolling = true;
+                            return;
+                        }
+                    }
+                }
+                // If not a swipe, check for scroll
+                else if (absDeltaY > absDeltaX && absDeltaY > moveThreshold) {
+                    instance.isScrolling = true;
+                    return;
+                }
+
+                // Continue hold if swipe is disabled and we've exceeded hold time
+                if (!settings.enableSwipe && holdDuration >= settings.holdTime) {
+                    updateProgress();
+                }
+            };
+
+            // Mouse move handler
+            const handleMouseMove = function (e) {
+                if (!instance.isHolding || !instance.initialMouse) return;
+
+                const moveThreshold = settings.touchMoveThreshold;
+                const deltaX = e.pageX - instance.initialMouse.x;
+                const deltaY = e.pageY - instance.initialMouse.y;
+                const absDeltaX = Math.abs(deltaX);
+                const absDeltaY = Math.abs(deltaY);
+                const currentTime = Date.now();
+                const holdDuration = currentTime - instance.holdStartTime;
+
+                if (absDeltaX > moveThreshold || absDeltaY > moveThreshold) {
+                    instance.hasMoved = true;
+                }
+
+                if (settings.enableSwipe && instance.hasMoved) {
+                    let direction = '';
+                    if (absDeltaX > absDeltaY) {
+                        direction = deltaX > 0 ? 'right' : 'left';
+                    } else if (absDeltaY > moveThreshold) {
+                        direction = deltaY > 0 ? 'down' : 'up';
+                    }
+
+                    if (direction) {
+                        instance.isSwiping = true;
+                        safeCallback(settings.onSwipe, e, direction, { deltaX, deltaY });
+                        endHold(e);
+                    }
+                }
+
+                // Continue hold if swipe is disabled and we've exceeded hold time
+                if ((!settings.enableSwipe || !instance.hasMoved) && holdDuration >= settings.holdTime) {
+                    updateProgress();
+
+                    // If significant movement detected after hold started, end the hold
+                    if (absDeltaX > moveThreshold * 3 || absDeltaY > moveThreshold * 3) {
+                        endHold(e);
+                    }
                 }
             };
 
             // Bind events with namespaces and capture phase
             $button
                 .on("mousedown.longpress", startHold)
-                .on("touchstart.longpress", { passive: false }, startHold)
+                .on("touchstart.longpress", startHold)
                 .on("mousemove.longpress", handleMouseMove)
-                .on("touchmove.longpress", { passive: true }, handleTouchMove)
+                .on("touchmove.longpress", handleTouchMove)
                 .on("contextmenu.longpress", handleContextMenu);
 
             // Global event binding for end events
             const $document = $(document);
-            $document.on("mouseup.longpress mouseleave.longpress touchend.longpress touchcancel.longpress", (e) => {
+            $document.on("mouseup.longpress touchend.longpress touchcancel.longpress", (e) => {
                 if (instance.isHolding) {
+                    endHold(e);
+                }
+            }).on("mouseleave.longpress", (e) => {
+                // For mouseleave, only end if the mouse actually leaves the document
+                if (instance.isHolding &&
+                    (e.relatedTarget === null || !$.contains(document.documentElement, e.relatedTarget))) {
                     endHold(e);
                 }
             }).on("visibilitychange.longpress", () => {
