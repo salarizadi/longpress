@@ -25,7 +25,7 @@ A jQuery plugin for handling long press events on both mobile and desktop device
 ## Installation
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/salarizadi/longpress@main/jquery.longpress.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/salarizadi/longpress@main/jquery.longpress.min.js"></script>
 ```
 
 ## Usage
